@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-pipeline
+  labels:
+    app: fraud-pipeline
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: fraud-pipeline
+  template:
+    metadata:
+      labels:
+        app: fraud-pipeline
+    spec:
+      containers:
+      - name: spark-job
+        image: bank/fraud-spark:latest
+        ports:
+        - containerPort: 7077
+      - name: airflow
+        image: bank/fraud-airflow:latest
+        ports:
+        - containerPort: 8080
+      - name: trino
+        image: trinodb/trino:latest
+        ports:
+        - containerPort: 8081

@@ -1,0 +1,23 @@
+{
+  "type": "record",
+  "name": "Transaction",
+  "namespace": "com.bank.fraud",
+  "fields": [
+    {"name": "Trans_id", "type": ["null", "int"], "default": null},
+    {"name": "Clt_id", "type": ["null", "int"], "default": null},
+    {"name": "Card_id", "type": ["null", "int"], "default": null},
+    {"name": "Dev_id", "type": ["null", "int"], "default": null},
+    {"name": "Trans_amount", "type": ["null", "int"], "default": null},
+    {"name": "Trans_date", "type": ["null", "string"], "default": null},
+    {"name": "Trans_type", "type": ["null", "string"], "default": null},
+    {"name": "Trans_status", "type": ["null", "string"], "default": null},
+    {"name": "Trans_destination", "type": ["null", "string"], "default": null},
+    {"name": "Dev_Ip_Location", "type": ["null", "string"], "default": null},
+    {"name": "Trans_Ref_No", "type": ["null", "string"], "default": null},
+    {"name": "Currency", "type": ["null", "string"], "default": null},
+    {"name": "Trans_Reason", "type": ["null", "string"], "default": null},
+    {"name": "Dest_account_No", "type": ["null", "int"], "default": null},
+    {"name": "Country_Dest", "type": ["null", "string"], "default": null},
+    {"name": "Country_Src", "type": ["null", "string"], "default": null}
+  ]
+}

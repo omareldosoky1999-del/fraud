@@ -1,0 +1,493 @@
+version: '3.8'
+services:
+  
+
+  # -------------------------
+  # ZOOKEEPER
+  # -------------------------
+  zookeeper:
+    image: zookeeper:3.8
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    networks:
+      - fraud-net
+    restart: unless-stopped
+
+  # -------------------------
+  # KAFKA
+  # -------------------------
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LISTENER_NAMES: PLAINTEXT,PLAINTEXT_HOST
+    depends_on:
+      - zookeeper
+    networks:
+      - fraud-net
+    restart: unless-stopped
+
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:latest
+    container_name: kafka-exporter
+    command:
+      - "--kafka.server=kafka:9092"
+    ports:
+      - "9308:9308"
+    networks:
+      - fraud-net
+    depends_on:
+      - kafka
+    restart: unless-stopped  
+
+  # -------------------------
+  # SCHEMA REGISTRY
+  # -------------------------
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    container_name: schema-registry
+    ports:
+      - "8081:8081"
+      - "8092:8092"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_OPTS: >
+        -javaagent:/opt/jmx_exporter.jar=8092:/opt/schema-registry.yml
+    volumes:
+      - ../monitoring/jmx/jmx_prometheus_javaagent-0.20.0.jar:/opt/jmx_exporter.jar
+      - ../monitoring/jmx/schema-registry.yml:/opt/schema-registry.yml
+    depends_on:
+      - kafka
+    networks:
+      - fraud-net
+    restart: unless-stopped
+
+  # -------------------------
+  # SPARK
+  # -------------------------
+  spark-master:
+    image: bde2020/spark-master:3.0.0-hadoop3.2
+    container_name: spark-master
+    depends_on:
+      namenode:
+        condition: service_started
+      datanode:
+        condition: service_started
+    ports:
+      - "8083:8083"
+      - "7077:7077"
+      - "8090:8090"
+    volumes:
+      - ..:/app
+      - ../monitoring/jmx/jmx_prometheus_javaagent-0.20.0.jar:/opt/jmx_exporter.jar
+      - ../monitoring/jmx/spark.yml:/opt/spark.yml
+    environment:
+      - INIT_DAEMON_STEP=setup_spark
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_LOCAL_IP=spark-master
+      - SPARK_DAEMON_JAVA_OPTS=-javaagent:/opt/jmx_exporter.jar=8090:/opt/spark.yml
+    networks:
+      - fraud-net
+    restart: unless-stopped
+
+  spark-worker:
+    image: bde2020/spark-worker:3.0.0-hadoop3.2
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    ports:
+      - "8082:8081"
+      - "8091:8091"
+    volumes:
+      - ..:/app
+      - ../monitoring/jmx/jmx_prometheus_javaagent-0.20.0.jar:/opt/jmx_exporter.jar
+      - ../monitoring/jmx/spark.yml:/opt/spark.yml
+    environment:
+      - "SPARK_MASTER=spark://spark-master:7077"
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - SPARK_LOCAL_IP=spark-worker
+      - SPARK_WORKER_OPTS=-javaagent:/opt/jmx_exporter.jar=8091:/opt/spark.yml
+
+    networks:
+      - fraud-net
+    restart: unless-stopped
+
+  # -------------------------
+  # HDFS (NameNode + DataNode)
+  # -------------------------
+  namenode:
+    image: apache/hadoop:3.3.6
+    container_name: namenode
+    hostname: namenode
+    ports:
+      - "9870:9870"
+      - "8020:8020"
+    environment:
+      - CORE-SITE.XML_fs.defaultFS=hdfs://namenode:8020
+      - HDFS-SITE.XML_dfs.namenode.rpc-address=namenode:8020
+      - HADOOP_HOME=/opt/hadoop
+    command: >
+      bash -c "if [ ! -d /hadoop/dfs/name/current ]; then
+        /opt/hadoop/bin/hdfs namenode -format -force;
+      fi; /opt/hadoop/bin/hdfs namenode"
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+    deploy:
+      resources:
+        limits:
+          memory: 4g # زودت الرام هنا عشان الـ NameNode ميفصلش
+    networks:
+      - fraud-net
+    restart: unless-stopped
+
+  datanode:
+    image: apache/hadoop:3.3.6
+    container_name: datanode
+    hostname: datanode
+    ports:
+      - "9864:9864"
+    environment:
+      - CORE-SITE.XML_fs.defaultFS=hdfs://namenode:8020
+      - HADOOP_HOME=/opt/hadoop
+    command: /opt/hadoop/bin/hdfs datanode
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+    depends_on:
+      - namenode
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+    networks:
+      - fraud-net
+    restart: unless-stopped
+
+  # -------------------------
+  # HBASE
+  # -------------------------
+  hbase:
+    image: harisekhon/hbase
+    container_name: hbase
+    ports:
+      - "16000:16000"
+      - "16010:16010"
+      - "16020:16020"
+      - "9090:9090"
+      - "8097:8097"
+    environment:
+      - HBASE_MASTER_OPTS:-javaagent:/opt/jmx_exporter.jar=8094:/opt/hbase.yml
+      - HBASE_REGIONSERVER_OPTS:-javaagent:/opt/jmx_exporter.jar=8095:/opt/hbase.yml
+    volumes:
+      - ../monitoring/jmx/jmx_prometheus_javaagent-0.20.0.jar:/opt/jmx_exporter.jar:ro
+      - ../monitoring/jmx/hbase.yml:/opt/hbase.yml:ro
+    depends_on:
+      - zookeeper
+    networks:
+      - fraud-net
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+    restart: unless-stopped
+
+  # -------------------------
+  # HIVE
+  # -------------------------
+  hive:
+    image: apache/hive:3.1.3
+    container_name: hive
+    ports:
+      - "10000:10000"
+      - "10002:10002"
+    environment:
+      - SERVICE_NAME=hiveserver2
+      - HIVE_METASTORE_DB_TYPE=derby
+      - SERVICE_OPTS=-Dhive.metastore.warehouse.dir=hdfs://namenode:8020/user/hive/warehouse
+    volumes:
+      - hive_data:/opt/hive/data
+    healthcheck:
+      test: ["CMD", "bash", "-c", "nc -z localhost 10000"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    depends_on:
+      - namenode
+    networks:
+      - fraud-net
+    restart: unless-stopped
+
+  
+  # -------------------------
+  # AIRFLOW
+  # -------------------------
+  airflow:
+    image: apache/airflow:2.8.1
+    container_name: airflow
+    user: root
+    depends_on:
+      - namenode
+    ports:
+      - "8088:8080"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      # استخدام قاعدة بيانات داخلية بسيطة للبدء
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__METRICS__STATSD_ON=True
+      - AIRFLOW__METRICS__STATSD_HOST=statsd-exporter
+      - AIRFLOW__METRICS__STATSD_PORT=9125
+    command: 
+      bash -c "airflow db init &&
+      airflow users create --username admin --firstname admin --lastname admin --role Admin --email admin@example.com --password admin &&
+      airflow webserver"
+    volumes:
+      - ../airflow-db:/opt/airflow
+    networks:
+      - fraud-net
+    restart: unless-stopped
+
+  statsd-exporter:
+    image: prom/statsd-exporter
+    container_name: statsd-exporter
+    ports:
+      - "9102:9102"
+      - "9125:9125/udp"
+    networks:
+      - fraud-net
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - "8089:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    privileged: true
+    networks:
+      - fraud-net
+    restart: unless-stopped
+
+  # =========================
+  # MINIO (NEW - IMPORTANT)
+  # =========================
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    networks:
+      - fraud-net
+    restart: unless-stopped
+
+  nessie:
+    image: ghcr.io/projectnessie/nessie:0.103.3
+    container_name: nessie
+    ports:
+      - "19120:19120"
+    environment:
+      QUARKUS_HTTP_PORT: 19120
+    networks:
+      - fraud-net
+    restart: unless-stopped    
+  
+  # =========================
+  # MLflow
+  # =========================
+  mlflow:
+    image: ghcr.io/mlflow/mlflow
+    ports:
+      - "5000:5000"
+    command: mlflow server --host 0.0.0.0
+    networks:
+      - fraud-net
+    restart: unless-stopped
+
+  # ===========================================================================
+  # LAYER 10: OPENLINEAGE / MARQUEZ
+  # ===========================================================================
+
+  postgres:
+    image: postgres:15.5-alpine
+    container_name: postgres
+    hostname: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-airflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow}
+      POSTGRES_DB: ${POSTGRES_DB:-airflow}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-scripts/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - fraud-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-airflow} -d ${POSTGRES_DB:-airflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+    restart: unless-stopped
+  marquez:
+    image: marquezproject/marquez:0.44.0
+    container_name: marquez
+    hostname: marquez
+    environment:
+      MARQUEZ_CONFIG: /usr/src/app/marquez.yml
+      MARQUEZ_PORT: 5001
+      MARQUEZ_ADMIN_PORT: 5002
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: airflow
+      POSTGRES_USER: ${POSTGRES_USER:-airflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow}
+      POSTGRES_HOST: postgres
+    ports:
+      - "5001:5001"
+      - "5002:5002"
+    volumes:
+    - ./marquez/marquez.yml:/usr/src/app/marquez.yml:ro
+    networks:
+      - fraud-net
+    depends_on:
+      - postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/api/v1/namespaces"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+    restart: unless-stopped
+
+  marquez-web:
+    image: marquezproject/marquez-web:0.44.0
+    container_name: marquez-web
+    hostname: marquez-web
+    environment:
+      MARQUEZ_HOST: marquez
+      MARQUEZ_PORT: 5001
+    ports:
+      - "3001:3000"
+    networks:
+      - fraud-net
+    depends_on:
+      - marquez
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+    restart: unless-stopped
+
+  trino:
+    image: trinodb/trino:435
+    container_name: trino
+    hostname: trino
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog:ro
+      - ./trino/config.properties:/etc/trino/config.properties:ro
+      - ./trino/jvm.config:/etc/trino/jvm.config:ro
+    ports:
+      - "8080:8080"
+    networks:
+      - fraud-net
+    depends_on:
+      - hive
+      - minio
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/info"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+    restart: unless-stopped
+  
+  # -------------------------
+  # PROMETHEUS (Monitoring)
+  # -------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9091:9090"
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - fraud-net
+    depends_on:
+      - kafka-exporter
+      - statsd-exporter
+      - cadvisor
+    restart: unless-stopped
+    
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - fraud-net
+    restart: unless-stopped
+
+networks:
+    fraud-net:
+      driver: bridge
+
+volumes:
+  airflow-db:
+  hadoop_namenode:
+  hadoop_datanode:
+  hive_data:
+  minio_data:
+  postgres-data:
+  grafana-data:
+  prometheus-data:

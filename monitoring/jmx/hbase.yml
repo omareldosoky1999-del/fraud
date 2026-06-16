@@ -1,0 +1,16 @@
+startDelaySeconds: 0
+
+rules:
+  - pattern: "Hadoop<service=HBase, name=RegionServer, sub=Server><>(.*)"
+    name: hbase_regionserver_$1
+    type: GAUGE
+
+  - pattern: "Hadoop<service=HBase, name=Master, sub=Server><>(.*)"
+    name: hbase_master_$1
+    type: GAUGE
+
+  - pattern: "java.lang<type=Memory><HeapMemoryUsage>(.*)"
+    name: jvm_heap_$1
+    type: GAUGE
+
+  - pattern: ".*"

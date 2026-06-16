@@ -1,0 +1,1 @@
+trans_sk,clt_sk,card_sk,device_sk,event_timestamp,junk_sk,trans_ref_no,trans_destination,dev_ip_location,country_src,country_dest,trans_reason,currency,dest_account_no,trans_amount,time_since_last_trans,distance_from_last_loc,risk_score,new_current_amount,trans_type,trans_status

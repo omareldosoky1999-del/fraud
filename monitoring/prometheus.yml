@@ -1,0 +1,56 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - prometheus:9090
+
+  - job_name: kafka
+    static_configs:
+      - targets:
+          - kafka-exporter:9308
+
+  - job_name: airflow
+    static_configs:
+      - targets:
+          - statsd-exporter:9102
+
+  - job_name: cadvisor
+    static_configs:
+      - targets:
+          - cadvisor:8080
+
+  # - job_name: namenode
+  #   metrics_path: /jmx
+  #   static_configs:
+  #     - targets:
+  #         - namenode:9870
+
+  # - job_name: datanode
+  #   metrics_path: /jmx
+  #   static_configs:
+  #     - targets:
+  #         - datanode:9864
+
+  - job_name: spark-master
+    static_configs:
+      - targets:
+          - spark-master:8090
+
+  - job_name: spark-worker
+    static_configs:
+      - targets:
+          - spark-worker:8091
+
+  - job_name: schema-registry
+    static_configs:
+      - targets:
+          - schema-registry:8092   
+
+  - job_name: 'hbase'
+    static_configs:
+      - targets:
+          - 'hbase:8097'     
