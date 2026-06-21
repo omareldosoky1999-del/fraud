@@ -1,4 +1,4 @@
-# 🛡️ Enterprise Fraud Detection Data Platform
+# 🛡️ High Frequency Financial Monitoring System about Fraud Detection
 
 <p align="center">
   <img src="https://img.shields.io/badge/Apache%20Kafka-Streaming-black?logo=apachekafka" />
@@ -480,34 +480,10 @@ Through this project you can understand:
 # 👨‍💻 Author
 
 **Omar Mohamed**
-
-Data Engineer | Big Data Enthusiast | Building Production-Inspired Data Platforms
-
-GitHub:
-
-https://github.com/omareldosoky1999-del
-
-LinkedIn:
-
-Add your LinkedIn profile here.
-
----
-
-# ⭐ Support
-
-If you found this project useful:
-
-- Give it a ⭐ on GitHub.
-- Fork the repository.
-- Share feedback and suggestions.
-
----
-
-# 📜 License
-
-This project is intended for **educational and portfolio purposes**.
-
-Feel free to modify, extend, and experiment with the architecture.
+**Youssif Hussein**
+**Ahmed Alrafy**
+**Mahmoud Ramdan**
+**Hossam Hassab**
 
 ---
 
