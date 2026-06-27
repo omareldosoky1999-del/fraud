@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/Apache-Airflow-017CEE?logo=apacheairflow" />
   <img src="https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker" />
   <img src="https://img.shields.io/badge/Python-3.x-blue?logo=python" />
-  <img src="https://img.shields.io/badge/Status-Completed-success" />
+  <img src="https://img.shields.io/badge/Status-In_Progress-blue" />
 </p>
 
 ## 📌 Project Overview
